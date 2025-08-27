@@ -12,81 +12,91 @@ import (
 var db *gorm.DB
 
 type Book struct {
-	ID            uint   `gorm:"primaryKey"`
+	ID            uint   `gorm:"primaryKey" json:"id"`
 	Title         string `json:"title"`
-	Author        string `json: "author"`
-	PublishedYear int    `json :"publishedyear"`
-	Price         int    `json:"year`
+	Author        string `json:"author"`
+	PublishedYear int    `json:"publishedYear"`
+	Price         int    `json:"price"`
 }
 
 func main() {
 	dsn := "host=127.0.0.1 user=divyansh password=Divyansh dbname=gin_crud port=5432 sslmode=disable"
 
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	var err error
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	db.AutoMigrate(&Book{})
 
-	log.Println("Database connected successfully!", db)
+	log.Println("Database connected successfully!")
 
 	r := gin.Default()
 
 	r.POST("/book", posting)
 	r.GET("/books", geting)
-	r.GET("book/:id", getbyid)
+	r.GET("/book/:id", getbyid)
 	r.PUT("/book/:id", putbyid)
 	r.PATCH("/book/:id", patching)
-	r.DELETE("/books/:id", delteing)
-	r.Run(":7000")
+	r.DELETE("/book/:id", deleting)
 
+	r.Run(":7990")
 }
+
+// POST /book
 func posting(c *gin.Context) {
 	var book Book
-
 	if err := c.ShouldBindJSON(&book); err != nil {
-		c.JSON(400, err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := db.Create(&book).Error; err != nil {
-		c.JSON(400, err.Error())
-	}
-	c.JSON(200, book)
 
+	if err := db.Create(&book).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, book)
 }
+
+// GET /books
 func geting(c *gin.Context) {
 	var books []Book
-
 	if err := db.Find(&books).Error; err != nil {
-		c.JSON(400, err.Error())
+		log.Println("DB error:", err)
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
+	log.Println("Books fetched from DB:", books)
 	c.JSON(200, books)
 }
+
+// GET /book/:id
 func getbyid(c *gin.Context) {
-	var books Book
+	var book Book
 	id := c.Param("id")
 
-	if err := db.First(&books, id).Error; err != nil {
-		c.JSON(400, err.Error())
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
 	}
-	c.JSON(200, books)
 
+	c.JSON(http.StatusOK, book)
 }
+
+// PUT /book/:id → full update
 func putbyid(c *gin.Context) {
 	var book Book
+	id := c.Param("id")
 
-	idstr := c.Param("id")
-
-	if err := db.First(&book, idstr).Error; err != nil {
-		c.JSON(404, err.Error())
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
-
 	}
+
 	var input Book
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(404, err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -94,56 +104,52 @@ func putbyid(c *gin.Context) {
 	book.Author = input.Author
 	book.PublishedYear = input.PublishedYear
 	book.Price = input.Price
+
 	db.Save(&book)
-	c.JSON(200, book)
-
+	c.JSON(http.StatusOK, book)
 }
+
+// PATCH /book/:id → partial update
 func patching(c *gin.Context) {
-	// only specified feild given by the USer will be modifed
-	id := c.Param("id")
 	var book Book
+	id := c.Param("id")
 
 	if err := db.First(&book, id).Error; err != nil {
-		c.JSON(401, gin.H{
-			"error": err.Error(),
-		})
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
-
 	}
+
 	var input map[string]interface{}
-
-	if err := c.ShouldBindJSON(&book); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := db.Model(&book).Updates(&input).Error; err != nil {
-		c.JSON(400, gin.H{
-			"error": err.Error(),
-		})
+
+	if err := db.Model(&book).Updates(input).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, book)
 
+	c.JSON(http.StatusOK, book)
 }
-func delteing(c *gin.Context) {
+
+// DELETE /book/:id
+func deleting(c *gin.Context) {
+	var book Book
 	id := c.Param("id")
 
-	var book Book
-
 	if err := db.First(&book, id).Error; err != nil {
-		c.JSON(400, err.Error())
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
+	}
 
-	}
-	if err := db.Delete(&book, id).Error; err != nil {
-		c.JSON(400, err.Error())
+	if err := db.Delete(&book).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(200, gin.H{
-		"status":          "deleted successfully",
-		"after delteing ": book,
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":       "deleted successfully",
+		"deleted_book": book,
 	})
-
 }
