@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
@@ -35,6 +36,8 @@ func main() {
 	r.GET("/books", geting)
 	r.GET("book/:id", getbyid)
 	r.PUT("/book/:id", putbyid)
+	r.PATCH("/book/:id", patching)
+	r.DELETE("/books/:id", delteing)
 	r.Run(":7000")
 
 }
@@ -93,5 +96,54 @@ func putbyid(c *gin.Context) {
 	book.Price = input.Price
 	db.Save(&book)
 	c.JSON(200, book)
+
+}
+func patching(c *gin.Context) {
+	// only specified feild given by the USer will be modifed
+	id := c.Param("id")
+	var book Book
+
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(401, gin.H{
+			"error": err.Error(),
+		})
+		return
+
+	}
+	var input map[string]interface{}
+
+	if err := c.ShouldBindJSON(&book); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	if err := db.Model(&book).Updates(&input).Error; err != nil {
+		c.JSON(400, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(200, book)
+
+}
+func delteing(c *gin.Context) {
+	id := c.Param("id")
+
+	var book Book
+
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(400, err.Error())
+		return
+
+	}
+	if err := db.Delete(&book, id).Error; err != nil {
+		c.JSON(400, err.Error())
+		return
+	}
+	c.JSON(200, gin.H{
+		"status":          "deleted successfully",
+		"after delteing ": book,
+	})
 
 }
