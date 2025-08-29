@@ -39,19 +39,23 @@ func main() {
 	db.Create(&usersData)
 
 	// Fetch users where price > 100 and price < 500
-	var users []User
-	result := db.Where("price > ? AND price < ?", 100, 500).Find(&users)
-	if result.Error != nil {
-		log.Fatal(result.Error)
-	}
+	//	var users []User
+	//result := db.Where("price > ? AND price < ?", 100, 500).Find(&users)
+	//if result.Error != nil {
+	//log.Fatal(result.Error)
+	//}
 	var userss []User
 
-	ans := db.Where("name = ?  AND price > ? AND price < ?", "Divyansh", 100, 500).Find(&userss)
-	if ans.Error != nil {
-		log.Fatal(result.Error)
-	}
-
 	// Print users
+	// Pagination logic
+	page := 2     // Example: Page 2
+	pageSize := 3 // Example: 3 records per page
+	offset := (page - 1) * pageSize
+
+	paginated := db.Limit(pageSize).Offset(offset).Find(&userss)
+	if paginated.Error != nil {
+		log.Fatal(paginated.Error)
+	}
 	for _, u := range userss {
 		fmt.Printf("ID: %d, Name: %s, Email: %s, Price: %d\n", u.ID, u.Name, u.Email, u.Price)
 	}
